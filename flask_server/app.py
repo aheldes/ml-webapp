@@ -1,11 +1,8 @@
-from itertools import count
-from flask import Flask, render_template
+from flask import Flask, render_template, jsonify
 from flask_socketio import SocketIO, emit
-import time
 import io
 from PIL import Image
 import base64, cv2
-import pyshine as ps
 import numpy as np
 import cv2
 import cvzone
@@ -18,6 +15,10 @@ socketio = SocketIO(app,cors_allowed_origins='*' )
 @app.route('/', methods=['POST', 'GET'])
 def index():
     return render_template('index.html')
+
+@app.route('/api', methods=['POST', 'GET'])
+def api():
+    return jsonify({'statuses': ['error', 'success', 'warning']})
 
 
 def readb64(base64_string):
