@@ -1,19 +1,30 @@
-import { FaceMesh } from "@mediapipe/face_mesh";
-import React, { useRef, useEffect } from "react";
-import * as Facemesh from "@mediapipe/face_mesh";
+import { FaceMesh} from "@mediapipe/face_mesh";
+import React, { useRef, useState } from "react";
 import * as cam from "@mediapipe/camera_utils";
+import { drawConnectors, drawLandmarks } from "@mediapipe/drawing_utils";
 import Webcam from "react-webcam";
+import { settings } from "./utils/settings";
 
 function App() {
+  const [checkedSettings, setCheckedSettings] = useState(
+    new Array(settings.length).fill(false)
+  );
+
   const webcamRef = useRef(null);
   const canvasRef = useRef(null);
-  const connect = window.drawConnectors;
-  var camera = null;
+  const camera = useRef(null);
 
-  function onResults(results) {
-    // const video = webcamRef.current.video;
-    const videoWidth = webcamRef.current.video.videoWidth;
-    const videoHeight = webcamRef.current.video.videoHeight;
+  const handleOnChange = (position) => {
+    const updateCheckedSettings = checkedSettings.map((item, index) =>
+      index === position ? !item : item
+    );
+    setCheckedSettings(updateCheckedSettings);
+  };
+
+  const onResults = (results) => {
+    const video = webcamRef.current.video;
+    const videoWidth = video.videoWidth;
+    const videoHeight = video.videoHeight;
 
     // Set canvas width
     canvasRef.current.width = videoWidth;
@@ -30,84 +41,114 @@ function App() {
       canvasElement.width,
       canvasElement.height
     );
+
     if (results.multiFaceLandmarks) {
-      // for (const landmarks of results.multiFaceLandmarks) {
-      //   connect(canvasCtx, landmarks, Facemesh.FACEMESH_TESSELATION, {
-      //     color: "#C0C0C070",
-      //     lineWidth: 1,
-      //   });
-      //   connect(canvasCtx, landmarks, Facemesh.FACEMESH_RIGHT_EYE, {
-      //     color: "#FF3030",
-      //   });
-      //   connect(canvasCtx, landmarks, Facemesh.FACEMESH_RIGHT_EYEBROW, {
-      //     color: "#FF3030",
-      //   });
-      //   connect(canvasCtx, landmarks, Facemesh.FACEMESH_LEFT_EYE, {
-      //     color: "#30FF30",
-      //   });
-      //   connect(canvasCtx, landmarks, Facemesh.FACEMESH_LEFT_EYEBROW, {
-      //     color: "#30FF30",
-      //   });
-      //   connect(canvasCtx, landmarks, Facemesh.FACEMESH_FACE_OVAL, {
-      //     color: "#E0E0E0",
-      //   });
-      //   connect(canvasCtx, landmarks, Facemesh.FACEMESH_LIPS, {
-      //     color: "#E0E0E0",
-      //   });
-      // }
-    }
+      for (const landmarks of results.multiFaceLandmarks) {
+        settings.forEach((setting, index) => {
+          if (setting.type === "connector" && checkedSettings[index]) {
+            drawConnectors(canvasCtx, landmarks, setting.attribute, setting.style);
+          } else if (setting.type === "landmark" && checkedSettings[index]) {
+            drawLandmarks(canvasCtx, landmarks, setting.style);
+          }
+        });
+      };
+    };
     canvasCtx.restore();
   }
-  // }
 
-  // setInterval(())
-  useEffect(() => {
-    const faceMesh = new FaceMesh({
-      locateFile: (file) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
-      },
-    });
+  
+  class GameTrigger extends React.Component {
+    constructor(props) {
+      super(props);
+      this.state = { gameOn: false };
 
-    faceMesh.setOptions({
-      maxNumFaces: 1,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5,
-    });
-
-    faceMesh.onResults(onResults);
-
-    if (
-      typeof webcamRef.current !== "undefined" &&
-      webcamRef.current !== null
-    ) {
-      camera = new cam.Camera(webcamRef.current.video, {
-        onFrame: async () => {
-          await faceMesh.send({ image: webcamRef.current.video });
-        },
-        width: 640,
-        height: 480,
-      });
-      camera.start();
+      this.handleOnClick = this.handleOnClick.bind(this)
+      // this.text = this.text()
     }
-  }, []);
+
+    startGame = () => {
+      const faceMesh = new FaceMesh({
+        locateFile: (file) => {
+          return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+        },
+      });
+
+      faceMesh.setOptions({
+        maxNumFaces: 1,
+        refineLandmarks: true,
+        selfie: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      });
+      
+      faceMesh.onResults(onResults);
+
+      if (
+        typeof webcamRef.current !== "undefined" &&
+        webcamRef.current !== null
+      ) {
+        camera.current = new cam.Camera(webcamRef.current.video, {
+          onFrame: async () => {
+            await faceMesh.send({ image: webcamRef.current.video });
+          },
+          width: 1280,
+          height: 720,
+        });
+        camera.current.start();
+      }
+      this.setState({ gameOn: true });
+    }
+
+    stopGame = () => {
+      camera.current.stop();
+      this.setState({ gameOn: false });
+    }
+
+
+    handleOnClick = () => {
+      if (this.state.gameOn) {
+        this.stopGame();
+      } else {
+        this.startGame();
+      }
+
+    }
+
+    // text = () => {
+    //   if (this.state.gameOn) {
+    //     console.log('1')
+    //     return "End game"
+    //   }
+    //   console.log('2')
+    //    return "Start game"
+    // }
+  
+  
+    render() {
+      const gameOn = this.state.gameOn;
+      return (
+        <button onClick={this.handleOnClick}
+          style={{
+            position: "absolute",
+              zindex: 9,
+              top: 0,
+          }}>
+          {gameOn ? "End game" : "Start game"}
+        </button>
+      );
+    }
+  }
 
   return (
     <center>
       <div className="App">
         <Webcam
-          ref={webcamRef}
-          style={{
-            position: "absolute",
-            marginLeft: "auto",
-            marginRight: "auto",
-            left: 0,
-            right: 0,
-            textAlign: "center",
-            zindex: 9,
-            width: 640,
-            height: 480,
+         muted={true}
+         ref={webcamRef}
+         style={{
+          width: "0%", height: "0%"
           }}
-        />{" "}
+        />
         <canvas
           ref={canvasRef}
           className="output_canvas"
@@ -117,15 +158,36 @@ function App() {
             marginRight: "auto",
             left: 0,
             right: 0,
+            top: 640,
             textAlign: "center",
             zindex: 9,
-            width: 640,
-            height: 480,
+            width: 1280,
+            height: 720,
           }}
         ></canvas>
+        {settings.map(({ name }, index) => {
+          return (
+            <li key={index} style={{
+              position: "absolute",
+              zindex: 9,
+              top: 10+index*20,
+            }}>
+              <input
+                type="checkbox"
+                id={`custom-checkbox-${index}`}
+                name={name}
+                value={name}
+                checked={checkedSettings[index]}
+                onChange={() => handleOnChange(index)}
+              />
+              <label htmlFor={`custom-checkbox-${index}`}>{name}</label>
+            </li>
+          )
+        })}
+        <GameTrigger />
       </div>
     </center>
-  );
+  )
 }
 
 export default App;
